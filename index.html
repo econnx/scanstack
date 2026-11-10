@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScanStack</title>
+<meta name="description" content="Phone photos of your notebook → one clean PDF. Removes shadows, whitens the paper, compresses. Runs in your browser, nothing is uploaded.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='14' y='6' width='36' height='46' rx='4' fill='%23c7d2fe'/><rect x='8' y='12' width='36' height='46' rx='4' fill='%234f46e5'/><path d='M16 26h20M16 34h20M16 42h12' stroke='white' stroke-width='4' stroke-linecap='round'/></svg>">
+<style>
+:root {
+  --bg: #f6f7fb; --card: #ffffff; --ink: #14161f; --muted: #5d6475; --line: #e3e6ef;
+  --accent: #4f46e5; --accent-ink: #ffffff; --accent-soft: #eef0ff; --danger: #c2410c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117; --card: #181b24; --ink: #eceef5; --muted: #9aa1b5; --line: #2a2f3d;
+    --accent: #8b85ff; --accent-ink: #0f1117; --accent-soft: #23234a; --danger: #fb923c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 34px; margin: 0 0 4px; letter-spacing: -0.02em; }
+.lead { color: var(--muted); margin: 0 0 24px; max-width: 640px; }
+.drop {
+  border: 2px dashed var(--line); border-radius: 16px; background: var(--card);
+  padding: 32px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { display: block; font-size: 18px; }
+.drop span { color: var(--muted); font-size: 14px; }
+.bar {
+  display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 20px 0;
+}
+.bar label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.bar select, .bar input[type=text] {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+}
+.bar input[type=text] { width: 170px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.seg button { font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--ink); padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+.go {
+  margin-left: auto; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 10px 18px;
+  background: var(--accent); color: var(--accent-ink); cursor: pointer;
+}
+.go:disabled { opacity: .45; cursor: default; }
+.status { color: var(--muted); font-size: 14px; min-height: 21px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+.page { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; position: relative; }
+.page.dragging { opacity: .4; }
+.page canvas { width: 100%; height: auto; display: block; border-radius: 6px; background: #fff; }
+.page .num { position: absolute; top: 14px; left: 14px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; border-radius: 6px; padding: 1px 7px; }
+.tools { display: flex; justify-content: space-between; margin-top: 8px; }
+.tools button { font: inherit; font-size: 15px; width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.tools button.del { color: var(--danger); }
+.how { margin-top: 40px; color: var(--muted); font-size: 14px; }
+.how h2 { color: var(--ink); font-size: 16px; margin: 0 0 8px; }
+.how ul { margin: 0; padding-left: 20px; }
+footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+footer a { color: var(--accent); }
+@media (max-width: 560px) { h1 { font-size: 28px; } .go { margin-left: 0; width: 100%; } .bar input[type=text] { width: 100%; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>ScanStack</h1>
+  <p class="lead">Phone photos of your notebook → one clean PDF, ready for Moodle or Google Classroom. Removes shadows, whitens the paper and keeps the file small. Everything runs in your browser — your pages are never uploaded.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add photos">
+    <strong>Drop photos here or click to choose</strong>
+    <span>JPG or PNG · any number of pages · you can also paste with Ctrl/Cmd+V</span>
+    <input type="file" id="file" accept="image/*" multiple hidden>
+  </div>
+
+  <div class="bar">
+    <label>Look
+      <span class="seg" id="mode">
+        <button data-mode="clean" aria-pressed="true">Clean scan</button>
+        <button data-mode="bw" aria-pressed="false">Black &amp; white</button>
+        <button data-mode="original" aria-pressed="false">Original</button>
+      </span>
+    </label>
+    <label>Size
+      <select id="quality">
+        <option value="small">Small (≈150 dpi)</option>
+        <option value="medium" selected>Medium (≈200 dpi)</option>
+        <option value="large">Large (≈300 dpi)</option>
+      </select>
+    </label>
+    <label>File name <input type="text" id="name" value="homework"></label>
+    <button class="go" id="go" disabled>Download PDF</button>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="how">
+    <h2>Tips</h2>
+    <ul>
+      <li>Shoot from straight above, in daylight, with the page filling most of the frame.</li>
+      <li>Drag pages to reorder (or use ← →), ⟳ rotates, ✕ removes.</li>
+      <li>"Clean scan" divides out the uneven lighting, so shadows from your phone disappear and pencil stays readable.</li>
+      <li>Most LMS limits are 10–50 MB; "Medium" keeps six pages around 1–3 MB.</li>
+    </ul>
+  </section>
+  <footer>Open source · <a href="https://github.com/econnx/scanstack">github.com/econnx/scanstack</a> · by econnx</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const pages = [];          // { bitmap, rot }
+let mode = "clean";
+const DPI = { small: 150, medium: 200, large: 300 };
+const A4 = { w: 8.27, h: 11.69 };   // inches
+const PREVIEW_W = 360;
+
+// ---------- input ----------
+const drop = $("drop"), fileInput = $("file");
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+document.addEventListener("paste", (e) => addFiles([...e.clipboardData.items].filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile())));
+
+async function addFiles(list) {
+  const files = [...list].filter((f) => f && f.type.startsWith("image/"));
+  if (!files.length) return;
+  setStatus(`Reading ${files.length} photo${files.length > 1 ? "s" : ""}…`);
+  // keep the order the files were picked in, sorted by name (phones name photos by time)
+  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  for (const f of files) {
+    try {
+      const bitmap = await createImageBitmap(f, { imageOrientation: "from-image" });
+      pages.push({ bitmap, rot: 0 });
+    } catch {
+      setStatus(`Couldn't read ${f.name}. HEIC photos: export them as JPG first.`);
+    }
+  }
+  render();
+}
+
+// ---------- image processing ----------
+// draws page p rotated into a canvas of width `w` (height follows the aspect ratio)
+function drawRotated(p, w) {
+  const swap = p.rot % 180 !== 0;
+  const sw = swap ? p.bitmap.height : p.bitmap.width;
+  const sh = swap ? p.bitmap.width : p.bitmap.height;
+  const scale = Math.min(1, w / sw);
+  const c = document.createElement("canvas");
+  c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((p.rot * Math.PI) / 180);
+  const dw = p.bitmap.width * scale, dh = p.bitmap.height * scale;
+  ctx.drawImage(p.bitmap, -dw / 2, -dh / 2, dw, dh);
+  return c;
+}
+
+// "Clean scan": divide each pixel by an estimate of the local paper brightness,
+// which removes shadows and gradients, then stretch the contrast.
+function clean(c, bw) {
+  const w = c.width, h = c.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+
+  // background estimate: tiny downscale (ink is thin, paper dominates), then smooth upscale
+  const sw = 40, sh = Math.max(1, Math.round((h / w) * sw));
+  const small = document.createElement("canvas"); small.width = sw; small.height = sh;
+  const sctx = small.getContext("2d", { willReadFrequently: true });
+  sctx.imageSmoothingQuality = "high";
+  sctx.drawImage(c, 0, 0, sw, sh);
+  // brighten the estimate a little with a 3×3 max so dense writing doesn't darken it
+  const sd = sctx.getImageData(0, 0, sw, sh), s = sd.data, m = new Uint8ClampedArray(s);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) {
+    let best = 0, bi = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = Math.min(sw - 1, Math.max(0, x + dx)), yy = Math.min(sh - 1, Math.max(0, y + dy));
+      const i = (yy * sw + xx) * 4, v = s[i] + s[i + 1] + s[i + 2];
+      if (v > best) { best = v; bi = i; }
+    }
+    const o = (y * sw + x) * 4;
+    m[o] = s[bi]; m[o + 1] = s[bi + 1]; m[o + 2] = s[bi + 2];
+  }
+  sctx.putImageData(new ImageData(m, sw, sh), 0, 0);
+  const bg = document.createElement("canvas"); bg.width = w; bg.height = h;
+  const bctx = bg.getContext("2d", { willReadFrequently: true });
+  bctx.imageSmoothingQuality = "high";
+  bctx.drawImage(small, 0, 0, w, h);
+  const b = bctx.getImageData(0, 0, w, h).data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const bgv = Math.max(1, 0.299 * b[i] + 0.587 * b[i + 1] + 0.114 * b[i + 2]);
+    let v = Math.min(1, g / bgv);               // 1 = paper, lower = ink
+    if (bw) {
+      v = v > 0.78 ? 255 : 0;
+    } else {
+      v = (v - 0.55) / (0.9 - 0.55);            // contrast stretch: faint lines/grid fade, ink darkens
+      v = Math.max(0, Math.min(1, v));
+      v = 255 * Math.pow(v, 1.6);
+    }
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function processed(p, w) {
+  const c = drawRotated(p, w);
+  return mode === "original" ? c : clean(c, mode === "bw");
+}
+
+// ---------- UI ----------
+function render() {
+  const grid = $("grid");
+  grid.innerHTML = "";
+  pages.forEach((p, i) => {
+    const card = document.createElement("div");
+    card.className = "page"; card.draggable = true; card.dataset.i = i;
+    card.appendChild(processed(p, PREVIEW_W));
+    const num = document.createElement("span"); num.className = "num"; num.textContent = i + 1;
+    card.appendChild(num);
+    const tools = document.createElement("div"); tools.className = "tools";
+    const btn = (label, title, fn, cls) => {
+      const b = document.createElement("button"); b.textContent = label; b.title = title;
+      if (cls) b.className = cls;
+      b.onclick = (e) => { e.stopPropagation(); fn(); render(); };
+      tools.appendChild(b);
+    };
+    btn("←", "Move left", () => i > 0 && pages.splice(i - 1, 0, pages.splice(i, 1)[0]));
+    btn("⟳", "Rotate", () => (p.rot = (p.rot + 90) % 360));
+    btn("✕", "Remove", () => pages.splice(i, 1), "del");
+    btn("→", "Move right", () => i < pages.length - 1 && pages.splice(i + 1, 0, pages.splice(i, 1)[0]));
+    card.appendChild(tools);
+    card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", i); });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("dragover", (e) => e.preventDefault());
+    card.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const from = +e.dataTransfer.getData("text/plain");
+      if (from !== i) { pages.splice(i, 0, pages.splice(from, 1)[0]); render(); }
+    });
+    grid.appendChild(card);
+  });
+  $("go").disabled = !pages.length;
+  setStatus(pages.length ? `${pages.length} page${pages.length > 1 ? "s" : ""} · drag to reorder` : "");
+}
+
+$("mode").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  mode = b.dataset.mode;
+  [...$("mode").children].forEach((x) => x.setAttribute("aria-pressed", x === b));
+  render();
+});
+
+function setStatus(t) { $("status").textContent = t; }
+
+// ---------- PDF ----------
+async function buildPdf() {
+  const { jsPDF } = window.jspdf;
+  const dpi = DPI[$("quality").value];
+  const pdf = new jsPDF({ unit: "in", format: "a4", compress: true });
+  for (let i = 0; i < pages.length; i++) {
+    setStatus(`Building page ${i + 1} of ${pages.length}…`);
+    await new Promise((r) => setTimeout(r));     // let the status repaint
+    const c = processed(pages[i], Math.round(A4.w * dpi));
+    // fit inside A4 with a small margin, keep aspect ratio, center
+    const mw = A4.w - 0.3, mh = A4.h - 0.3;
+    const k = Math.min(mw / c.width, mh / c.height);
+    const w = c.width * k, h = c.height * k;
+    if (i) pdf.addPage("a4", "portrait");
+    const q = mode === "original" ? 0.82 : 0.75;
+    pdf.addImage(c.toDataURL("image/jpeg", q), "JPEG", (A4.w - w) / 2, (A4.h - h) / 2, w, h, undefined, "FAST");
+  }
+  return pdf;
+}
+
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true;
+  try {
+    const pdf = await buildPdf();
+    const blob = pdf.output("blob");
+    const name = ($("name").value.trim() || "homework").replace(/[\\/:*?"<>|]+/g, "_");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name.endsWith(".pdf") ? name : name + ".pdf";
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    setStatus(`Done: ${pages.length} pages, ${(blob.size / 1048576).toFixed(1)} MB`);
+  } catch (err) {
+    setStatus("Something went wrong: " + err.message);
+  }
+  $("go").disabled = false;
+});
+
+// ---------- demo (?demo) : synthetic notebook pages, used for screenshots and self-test ----------
+if (new URLSearchParams(location.search).has("demo")) (async () => {
+  const lines = ["f(x) = x + √(x²+2)", "f′(x) = 1 + x/√(x²+2) > 0", "lim (ln(1+x²) − sin x²)/x⁴", "= −1/2", "P(q) = −q³ + 3q² + 45q − 20", "P′(5) = 0 → q = 5"];
+  for (let n = 0; n < 3; n++) {
+    const c = document.createElement("canvas"); c.width = 900; c.height = 1200;
+    const g = c.getContext("2d");
+    const grd = g.createLinearGradient(0, 0, 900, 1200);   // uneven lighting + phone shadow
+    grd.addColorStop(0, "#d9d4c6"); grd.addColorStop(0.6, "#b9b2a2"); grd.addColorStop(1, "#8d8677");
+    g.fillStyle = grd; g.fillRect(0, 0, 900, 1200);
+    g.strokeStyle = "rgba(90,110,160,.35)"; g.lineWidth = 1;
+    for (let x = 0; x < 900; x += 30) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 1200); g.stroke(); }
+    for (let y = 0; y < 1200; y += 30) { g.beginPath(); g.moveTo(0, y); g.lineTo(900, y); g.stroke(); }
+    const sh = g.createRadialGradient(820, 1180, 40, 820, 1180, 520);   // soft phone shadow
+    sh.addColorStop(0, "rgba(0,0,0,.4)"); sh.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = sh; g.fillRect(0, 0, 900, 1200);
+    g.fillStyle = "#1d2c7a"; g.font = "italic 44px 'Bradley Hand', 'Segoe Script', cursive";
+    g.fillText(`№${n + 1}`, 400, 90);
+    lines.forEach((t, k) => g.fillText(t, 70, 190 + k * 150 + n * 20));
+    pages.push({ bitmap: await createImageBitmap(c), rot: 0 });
+  }
+  render();
+  if (new URLSearchParams(location.search).has("selftest")) {
+    const blob = (await buildPdf()).output("blob");
+    document.title = `SELFTEST ok pages=${pages.length} bytes=${blob.size}`;
+  }
+})();
+</script>
+</body>
+</html>
