@@ -7,7 +7,7 @@ Phone photos of your notebook → one clean PDF, ready to submit to Moodle, Goog
 - **Clean scan**: removes shadows and uneven lighting, whitens the paper, keeps pencil readable
 - **Black & white** mode for the smallest files, **Original** if you want the photo as is
 - Reorder (drag or ← →), rotate, remove pages
-- A4 pages, three size presets (≈150 / 200 / 300 dpi); six pages are usually 1–3 MB
+- A4 pages, three size presets (≈150 / 200 / 300 dpi), the file size is shown after export
 - Runs entirely in your browser. Nothing is uploaded, there is no server.
 
 ## How the clean scan works
