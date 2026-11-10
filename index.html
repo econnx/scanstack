@@ -298,6 +298,8 @@ $("go").addEventListener("click", async () => {
 
 // ---------- demo (?demo) : synthetic notebook pages, used for screenshots and self-test ----------
 if (new URLSearchParams(location.search).has("demo")) (async () => {
+  const m = new URLSearchParams(location.search).get("mode");
+  if (m) $("mode").querySelector(`[data-mode="${m}"]`)?.click();
   const lines = ["f(x) = x + √(x²+2)", "f′(x) = 1 + x/√(x²+2) > 0", "lim (ln(1+x²) − sin x²)/x⁴", "= −1/2", "P(q) = −q³ + 3q² + 45q − 20", "P′(5) = 0 → q = 5"];
   for (let n = 0; n < 3; n++) {
     const c = document.createElement("canvas"); c.width = 900; c.height = 1200;
